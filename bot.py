@@ -1,5 +1,7 @@
-import asyncio
 import os
+import asyncio
+from aiohttp import web
+
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -8,15 +10,12 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 # ENV
 # ======================
 TOKEN = os.getenv("TOKEN")
-DRIVER_CHAT_ID_RAW = os.getenv("DRIVER_CHAT_ID")
+DRIVER_CHAT_ID = int(os.getenv("DRIVER_CHAT_ID", "0"))
 
 if not TOKEN:
-    raise RuntimeError("❌ TOKEN not found in ENV")
-
-if not DRIVER_CHAT_ID_RAW:
-    raise RuntimeError("❌ DRIVER_CHAT_ID not found in ENV")
-
-DRIVER_CHAT_ID = int(DRIVER_CHAT_ID_RAW)
+    raise RuntimeError("TOKEN not found in ENV")
+if DRIVER_CHAT_ID == 0:
+    raise RuntimeError("DRIVER_CHAT_ID not found in ENV")
 
 # ======================
 # INIT
@@ -28,25 +27,37 @@ orders = {}
 driver_order = {}
 
 # ======================
+# WEB SERVER (IMPORTANT FOR RENDER)
+# ======================
+async def health(request):
+    return web.Response(text="OK")
+
+async def run_web():
+    app = web.Application()
+    app.router.add_get("/", health)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+
+    port = int(os.getenv("PORT", 10000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+
+    await site.start()
+    print(f"🌐 Web server started on port {port}")
+
+# ======================
 # START
 # ======================
 @dp.message(Command("start"))
 async def start(message: types.Message):
     await message.answer(
-        "🚕 Добро пожаловать в TAXI_AMAN!\n\n"
-        "💛 Мы рады видеть тебя здесь\n\n"
-        "📍 Как заказать поездку:\n"
-        "• Отправь сообщение в формате:\n"
-        "  Откуда - Куда\n\n"
-        "🚖 После этого водитель сам возьмёт заказ\n\n"
-        "🔒 Важно:\n"
-        "• Все поездки полностью АНОНИМНЫ для других клиентов\n"
-        "• Твои данные видны только водителю\n\n"
-        "🚕 Быстро. Удобно. Без лишнего шума."
+        "🚕 Такси-бот запущен\n"
+        "Напиши: Откуда - Куда\n\n"
+        "✨ Все поездки анонимны для других клиентов"
     )
 
 # ======================
-# СОЗДАНИЕ ЗАКАЗА
+# ORDER CREATE
 # ======================
 @dp.message()
 async def handle(message: types.Message):
@@ -70,38 +81,27 @@ async def handle(message: types.Message):
         }
 
         keyboard_driver = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🚕 Принять заказ",
-                    callback_data=f"accept_{order_id}"
-                )
-            ]
+            [InlineKeyboardButton(text="🚕 Принять заказ", callback_data=f"accept_{order_id}")]
         ])
 
         keyboard_client = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="❌ Отменить заказ",
-                    callback_data=f"cancel_{order_id}"
-                )
-            ]
+            [InlineKeyboardButton(text="❌ Отменить заказ", callback_data=f"cancel_{order_id}")]
         ])
-
-        safe_text = text[:1000]
 
         await bot.send_message(
             DRIVER_CHAT_ID,
-            f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n{safe_text}",
+            f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n{text}",
             reply_markup=keyboard_driver
         )
 
         await message.answer(
-            "✅ Заказ отправлен! Ожидай водителя 🚕",
+            "✅ Заказ отправлен водителям 🚕\n"
+            "Ты можешь отменить его кнопкой ниже",
             reply_markup=keyboard_client
         )
 
 # ======================
-# ОТМЕНА ЗАКАЗА
+# CANCEL
 # ======================
 @dp.callback_query(F.data.startswith("cancel_"))
 async def cancel(callback: types.CallbackQuery):
@@ -110,7 +110,7 @@ async def cancel(callback: types.CallbackQuery):
     order = orders.get(order_id)
 
     if not order:
-        await callback.answer("Заказ уже неактивен", show_alert=True)
+        await callback.answer("Заказ уже недоступен", show_alert=True)
         return
 
     orders.pop(order_id, None)
@@ -119,16 +119,13 @@ async def cancel(callback: types.CallbackQuery):
         if o_id == order_id:
             driver_order.pop(d_id, None)
 
-    await bot.send_message(
-        order["client_id"],
-        "❌ Ваш заказ отменён"
-    )
+    await bot.send_message(order["client_id"], "❌ Ваш заказ отменён")
 
     await callback.message.edit_text("❌ Заказ отменён")
     await callback.answer()
 
 # ======================
-# ПРИНЯТИЕ ЗАКАЗА
+# ACCEPT
 # ======================
 @dp.callback_query(F.data.startswith("accept_"))
 async def accept(callback: types.CallbackQuery):
@@ -145,21 +142,17 @@ async def accept(callback: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="5 мин", callback_data=f"time_{order_id}_5"),
-            InlineKeyboardButton(text="7 мин", callback_data=f"time_{order_id}_7"),
-        ],
-        [
             InlineKeyboardButton(text="10 мин", callback_data=f"time_{order_id}_10"),
-            InlineKeyboardButton(text="15 мин", callback_data=f"time_{order_id}_15"),
         ],
         [
+            InlineKeyboardButton(text="15 мин", callback_data=f"time_{order_id}_15"),
             InlineKeyboardButton(text="20 мин", callback_data=f"time_{order_id}_20"),
-            InlineKeyboardButton(text="25 мин", callback_data=f"time_{order_id}_25"),
         ],
     ])
 
     await bot.send_message(
         driver_id,
-        "⏱ Выбери время прибытия:",
+        "⏱️ Выбери время прибытия:",
         reply_markup=keyboard
     )
 
@@ -167,12 +160,12 @@ async def accept(callback: types.CallbackQuery):
     await callback.answer()
 
 # ======================
-# ВЫБОР ВРЕМЕНИ
+# TIME
 # ======================
 @dp.callback_query(F.data.startswith("time_"))
 async def set_time(callback: types.CallbackQuery):
 
-    _, order_id, minutes = callback.data.split("_")
+    , order_id, minutes = callback.data.split("")
     order_id = int(order_id)
 
     driver_id = callback.from_user.id
@@ -194,7 +187,9 @@ async def set_time(callback: types.CallbackQuery):
 # MAIN
 # ======================
 async def main():
-    print("🚕 Bot is running")
+    print("🚕 Bot starting...")
+
+    await run_web()          # 🔥 КЛЮЧЕВО ДЛЯ RENDER
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
