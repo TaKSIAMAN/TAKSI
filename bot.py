@@ -5,7 +5,7 @@ from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ======================
-# ENV SAFETY
+# ENV
 # ======================
 TOKEN = os.getenv("TOKEN")
 DRIVER_CHAT_ID_RAW = os.getenv("DRIVER_CHAT_ID")
@@ -16,10 +16,7 @@ if not TOKEN:
 if not DRIVER_CHAT_ID_RAW:
     raise RuntimeError("❌ DRIVER_CHAT_ID not found in ENV")
 
-try:
-    DRIVER_CHAT_ID = int(DRIVER_CHAT_ID_RAW)
-except ValueError:
-    raise RuntimeError("❌ DRIVER_CHAT_ID must be integer")
+DRIVER_CHAT_ID = int(DRIVER_CHAT_ID_RAW)
 
 # ======================
 # INIT
@@ -35,7 +32,18 @@ driver_order = {}
 # ======================
 @dp.message(Command("start"))
 async def start(message: types.Message):
-    await message.answer("🚕 Такси-бот запущен\nОтправь: Откуда - Куда")
+    await message.answer(
+        "🚕 Добро пожаловать в TAXI_AMAN!\n\n"
+        "💛 Мы рады видеть тебя здесь\n\n"
+        "📍 Как заказать поездку:\n"
+        "• Отправь сообщение в формате:\n"
+        "  Откуда - Куда\n\n"
+        "🚖 После этого водитель сам возьмёт заказ\n\n"
+        "🔒 Важно:\n"
+        "• Все поездки полностью АНОНИМНЫ для других клиентов\n"
+        "• Твои данные видны только водителю\n\n"
+        "🚕 Быстро. Удобно. Без лишнего шума."
+    )
 
 # ======================
 # СОЗДАНИЕ ЗАКАЗА
@@ -62,26 +70,38 @@ async def handle(message: types.Message):
         }
 
         keyboard_driver = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚕 Принять заказ", callback_data=f"accept_{order_id}")]
+            [
+                InlineKeyboardButton(
+                    text="🚕 Принять заказ",
+                    callback_data=f"accept_{order_id}"
+                )
+            ]
         ])
 
         keyboard_client = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отменить заказ", callback_data=f"cancel_{order_id}")]
+            [
+                InlineKeyboardButton(
+                    text="❌ Отменить заказ",
+                    callback_data=f"cancel_{order_id}"
+                )
+            ]
         ])
+
+        safe_text = text[:1000]
 
         await bot.send_message(
             DRIVER_CHAT_ID,
-            f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n{text}",
+            f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n{safe_text}",
             reply_markup=keyboard_driver
         )
 
         await message.answer(
-            "✅ Заказ отправлен 🚕",
+            "✅ Заказ отправлен! Ожидай водителя 🚕",
             reply_markup=keyboard_client
         )
 
 # ======================
-# ОТМЕНА ЗАКАЗА (ПАССАЖИР)
+# ОТМЕНА ЗАКАЗА
 # ======================
 @dp.callback_query(F.data.startswith("cancel_"))
 async def cancel(callback: types.CallbackQuery):
@@ -95,7 +115,6 @@ async def cancel(callback: types.CallbackQuery):
 
     orders.pop(order_id, None)
 
-    # если водитель уже взял — убираем
     for d_id, o_id in list(driver_order.items()):
         if o_id == order_id:
             driver_order.pop(d_id, None)
@@ -106,7 +125,6 @@ async def cancel(callback: types.CallbackQuery):
     )
 
     await callback.message.edit_text("❌ Заказ отменён")
-
     await callback.answer()
 
 # ======================
@@ -147,7 +165,8 @@ async def accept(callback: types.CallbackQuery):
 
     await callback.message.edit_text(f"🚕 Заказ #{order_id} принят")
     await callback.answer()
-    # ======================
+
+# ======================
 # ВЫБОР ВРЕМЕНИ
 # ======================
 @dp.callback_query(F.data.startswith("time_"))
@@ -172,10 +191,10 @@ async def set_time(callback: types.CallbackQuery):
     await callback.answer()
 
 # ======================
-# START BOT
+# MAIN
 # ======================
 async def main():
-    print("🚕 Бот запущен")
+    print("🚕 Bot is running")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
