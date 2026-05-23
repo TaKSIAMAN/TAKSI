@@ -27,7 +27,7 @@ orders = {}
 driver_order = {}
 
 # ======================
-# WEB SERVER (IMPORTANT FOR RENDER)
+# WEB SERVER (RENDER FIX)
 # ======================
 async def health(request):
     return web.Response(text="OK")
@@ -43,7 +43,7 @@ async def run_web():
     site = web.TCPSite(runner, "0.0.0.0", port)
 
     await site.start()
-    print(f"🌐 Web server started on port {port}")
+    print(f"🌐 Server running on port {port}")
 
 # ======================
 # START
@@ -52,18 +52,23 @@ async def run_web():
 async def start(message: types.Message):
     await message.answer(
         "🚕 Такси-бот запущен\n"
-        "Напиши: Откуда - Куда\n\n"
+        "Отправь: Откуда - Куда\n\n"
         "✨ Все поездки анонимны для других клиентов"
     )
 
 # ======================
-# ORDER CREATE
+# GLOBAL FILTER (ANTI-RADIO FIX)
 # ======================
 @dp.message()
 async def handle(message: types.Message):
 
     user_id = message.from_user.id
+    chat_id = message.chat.id
     text = message.text
+
+    # ❌ не реагируем в группе водителей
+    if chat_id == DRIVER_CHAT_ID:
+        return
 
     if not text:
         return
@@ -71,34 +76,34 @@ async def handle(message: types.Message):
     if user_id in driver_order:
         return
 
-    if "-" in text:
+    if "-" not in text:
+        return
 
-        order_id = len(orders) + 1
+    order_id = len(orders) + 1
 
-        orders[order_id] = {
-            "client_id": user_id,
-            "text": text
-        }
+    orders[order_id] = {
+        "client_id": user_id,
+        "text": text
+    }
 
-        keyboard_driver = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚕 Принять заказ", callback_data=f"accept_{order_id}")]
-        ])
+    keyboard_driver = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚕 Принять заказ", callback_data=f"accept_{order_id}")]
+    ])
 
-        keyboard_client = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отменить заказ", callback_data=f"cancel_{order_id}")]
-        ])
+    keyboard_client = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отменить заказ", callback_data=f"cancel_{order_id}")]
+    ])
 
-        await bot.send_message(
-            DRIVER_CHAT_ID,
-            f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n{text}",
-            reply_markup=keyboard_driver
-        )
+    await bot.send_message(
+        DRIVER_CHAT_ID,
+        f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n{text}",
+        reply_markup=keyboard_driver
+    )
 
-        await message.answer(
-            "✅ Заказ отправлен водителям 🚕\n"
-            "Ты можешь отменить его кнопкой ниже",
-            reply_markup=keyboard_client
-        )
+    await message.answer(
+        "✅ Заказ отправлен водителям 🚕",
+        reply_markup=keyboard_client
+    )
 
 # ======================
 # CANCEL
@@ -110,7 +115,7 @@ async def cancel(callback: types.CallbackQuery):
     order = orders.get(order_id)
 
     if not order:
-        await callback.answer("Заказ уже недоступен", show_alert=True)
+        await callback.answer("Заказ уже неактивен", show_alert=True)
         return
 
     orders.pop(order_id, None)
@@ -187,9 +192,9 @@ async def set_time(callback: types.CallbackQuery):
 # MAIN
 # ======================
 async def main():
-    print("🚕 Bot starting...")
+    print("🚕 Bot started")
 
-    await run_web()          # 🔥 КЛЮЧЕВО ДЛЯ RENDER
+    await run_web()          # 🔥 FIX RENDER PORT
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
