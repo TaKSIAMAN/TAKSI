@@ -27,7 +27,7 @@ orders = {}
 driver_order = {}
 
 # ======================
-# WEB SERVER (RENDER FIX)
+# RENDER PORT FIX
 # ======================
 async def health(request):
     return web.Response(text="OK")
@@ -43,7 +43,7 @@ async def run_web():
     site = web.TCPSite(runner, "0.0.0.0", port)
 
     await site.start()
-    print(f"🌐 Server running on port {port}")
+    print(f"🌐 Server started on port {port}")
 
 # ======================
 # START
@@ -52,12 +52,12 @@ async def run_web():
 async def start(message: types.Message):
     await message.answer(
         "🚕 Такси-бот запущен\n"
-        "Отправь: Откуда - Куда\n\n"
-        "✨ Все поездки анонимны для других клиентов"
+        "Напиши: Откуда - Куда\n\n"
+        "✨ Поездки анонимны для других клиентов"
     )
 
 # ======================
-# GLOBAL FILTER (ANTI-RADIO FIX)
+# CREATE ORDER (CLIENTS ONLY)
 # ======================
 @dp.message()
 async def handle(message: types.Message):
@@ -66,14 +66,15 @@ async def handle(message: types.Message):
     chat_id = message.chat.id
     text = message.text
 
-    # ❌ не реагируем в группе водителей
+    # ❌ игнор группы водителей
     if chat_id == DRIVER_CHAT_ID:
         return
 
-    if not text:
+    # ❌ только личка
+    if message.chat.type != "private":
         return
 
-    if user_id in driver_order:
+    if not text:
         return
 
     if "-" not in text:
@@ -165,7 +166,7 @@ async def accept(callback: types.CallbackQuery):
     await callback.answer()
 
 # ======================
-# TIME
+# TIME FIX (ВАЖНО)
 # ======================
 @dp.callback_query(F.data.startswith("time_"))
 async def set_time(callback: types.CallbackQuery):
@@ -194,7 +195,7 @@ async def set_time(callback: types.CallbackQuery):
 async def main():
     print("🚕 Bot started")
 
-    await run_web()          # 🔥 FIX RENDER PORT
+    await run_web()  # FIX FOR RENDER PORT
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
