@@ -171,7 +171,7 @@ async def accept(callback: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("time_"))
 async def set_time(callback: types.CallbackQuery):
 
-    , order_id, minutes = callback.data.split("")
+    _, order_id, minutes = callback.data.split("_")
     order_id = int(order_id)
 
     driver_id = callback.from_user.id
