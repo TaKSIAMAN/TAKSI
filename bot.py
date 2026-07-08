@@ -33,6 +33,8 @@ dp = Dispatcher()
 
 orders = {}
 driver_order = {}
+driver_messages = {}
+taken_orders = {}
 
 # ======================
 # WEB SERVER FOR RENDER
@@ -131,11 +133,13 @@ async def handle(message: types.Message):
         ]
     )
 
-    await bot.send_message(
-        DRIVER_CHAT_ID,
-        f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n\n{text}",
-        reply_markup=keyboard_driver
-    )
+    driver_msg = await bot.send_message(
+    DRIVER_CHAT_ID,
+    f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n\n{text}",
+    reply_markup=keyboard_driver
+)
+
+orders[order_id]["driver_message_id"] = driver_msg.message_id
 
     await message.answer(
         "✅ Заказ отправлен водителям 🚕",
@@ -162,14 +166,19 @@ async def cancel(callback: types.CallbackQuery):
 
     orders.pop(order_id, None)
 
+    taken_orders.pop(order_id, None)
+
     for d_id, o_id in list(driver_order.items()):
         if o_id == order_id:
             driver_order.pop(d_id, None)
 
-    await bot.send_message(
-        order["client_id"],
-        "❌ Ваш заказ отменён"
-    )
+    try:
+        await bot.delete_message(
+            DRIVER_CHAT_ID,
+            order["driver_message_id"]
+        )
+    except:
+        pass
 
     await callback.message.edit_text(
         "❌ Заказ отменён"
