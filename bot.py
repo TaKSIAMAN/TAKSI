@@ -134,12 +134,12 @@ async def handle(message: types.Message):
     )
 
     driver_msg = await bot.send_message(
-    DRIVER_CHAT_ID,
-    f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n\n{text}",
-    reply_markup=keyboard_driver
+         DRIVER_CHAT_ID,
+         f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n\n{text}",
+         reply_markup=keyboard_driver
 )
 
-orders[order_id]["driver_message_id"] = driver_msg.message_id
+        orders[order_id]["driver_message_id"] = driver_msg.message_id
 
     await message.answer(
         "✅ Заказ отправлен водителям 🚕",
