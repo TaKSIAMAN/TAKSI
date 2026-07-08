@@ -33,8 +33,9 @@ dp = Dispatcher()
 
 orders = {}
 driver_order = {}
-driver_messages = {}
-taken_orders = {}
+
+driver_numbers = {}
+active_driver = {}
 
 # ======================
 # WEB SERVER FOR RENDER
@@ -164,14 +165,19 @@ async def cancel(callback: types.CallbackQuery):
         )
         return
 
-    orders.pop(order_id, None)
+    # уведомить водителя
+    driver_id = order.get("driver_id")
 
-    taken_orders.pop(order_id, None)
+    if driver_id:
+        try:
+            await bot.send_message(
+                driver_id,
+                "❌ Клиент отменил заказ."
+            )
+        except:
+            pass
 
-    for d_id, o_id in list(driver_order.items()):
-        if o_id == order_id:
-            driver_order.pop(d_id, None)
-
+    # удалить сообщение в группе водителей
     try:
         await bot.delete_message(
             DRIVER_CHAT_ID,
@@ -180,6 +186,17 @@ async def cancel(callback: types.CallbackQuery):
     except:
         pass
 
+    # очистить словари
+    orders.pop(order_id, None)
+
+    active_driver.pop(order_id, None)
+    driver_numbers.pop(order_id, None)
+
+    for d_id, o_id in list(driver_order.items()):
+        if o_id == order_id:
+            driver_order.pop(d_id, None)
+
+    # изменить сообщение клиента
     await callback.message.edit_text(
         "❌ Заказ отменён"
     )
@@ -195,63 +212,100 @@ async def accept(callback: types.CallbackQuery):
 
     order_id = int(callback.data.split("_")[1])
 
-    driver_id = callback.from_user.id
-
     if order_id not in orders:
         await callback.answer(
-            "Заказ недоступен",
+            "Заказ уже недоступен",
             show_alert=True
         )
         return
 
-    driver_order[driver_id] = order_id
-
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text="5 мин",
-                    callback_data=f"time_{order_id}_5"
-                ),
-                InlineKeyboardButton(
-                    text="7 мин",
-                    callback_data=f"time_{order_id}_7"
-                ),
+                InlineKeyboardButton(text="1", callback_data=f"driver_{order_id}_1"),
+                InlineKeyboardButton(text="2", callback_data=f"driver_{order_id}_2"),
+                InlineKeyboardButton(text="3", callback_data=f"driver_{order_id}_3"),
             ],
             [
-                InlineKeyboardButton(
-                    text="10 мин",
-                    callback_data=f"time_{order_id}_10"
-                ),
-                InlineKeyboardButton(
-                    text="15 мин",
-                    callback_data=f"time_{order_id}_15"
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="20 мин",
-                    callback_data=f"time_{order_id}_20"
-                ),
-                InlineKeyboardButton(
-                    text="25 мин",
-                    callback_data=f"time_{order_id}_25"
-                ),
+                InlineKeyboardButton(text="4", callback_data=f"driver_{order_id}_4"),
+                InlineKeyboardButton(text="5", callback_data=f"driver_{order_id}_5"),
+                InlineKeyboardButton(text="6", callback_data=f"driver_{order_id}_6"),
             ]
         ]
     )
 
     await bot.send_message(
-        driver_id,
+        callback.from_user.id,
+        "Выберите свой номер:",
+        reply_markup=keyboard
+    )
+
+   await callback.answer()
+
+
+ @dp.callback_query(F.data.startswith("driver_"))
+ async def choose_driver(callback: types.CallbackQuery):
+
+    _, order_id, number = callback.data.split("_")
+
+    order_id = int(order_id)
+
+    if order_id not in orders:
+        await callback.answer(
+            "Заказ уже отменён",
+            show_alert=True
+        )
+        return
+
+    if order_id in active_driver:
+        await callback.answer(
+            "Этот заказ уже забрал другой водитель",
+            show_alert=True
+        )
+        return
+
+    active_driver[order_id] = callback.from_user.id
+    driver_numbers[order_id] = number
+    driver_order[callback.from_user.id] = order_id
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="5 мин", callback_data=f"time_{order_id}_5"),
+                InlineKeyboardButton(text="7 мин", callback_data=f"time_{order_id}_7"),
+            ],
+            [
+                InlineKeyboardButton(text="10 мин", callback_data=f"time_{order_id}_10"),
+                InlineKeyboardButton(text="15 мин", callback_data=f"time_{order_id}_15"),
+            ],
+            [
+                InlineKeyboardButton(text="20 мин", callback_data=f"time_{order_id}_20"),
+                InlineKeyboardButton(text="25 мин", callback_data=f"time_{order_id}_25"),
+            ]
+        ]
+    )
+
+    try:
+    await bot.edit_message_text(
+        chat_id=DRIVER_CHAT_ID,
+        message_id=orders[order_id]["driver_message_id"],
+        text=(
+            f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n\n"
+            f"{orders[order_id]['text']}\n\n"
+            f"👤 Водитель №{number}"
+        ),
+        reply_markup=None
+    )
+except:
+    pass
+    await bot.send_message(
+        callback.from_user.id,
         "⏱ Выбери время прибытия:",
         reply_markup=keyboard
     )
 
-    await callback.message.edit_text(
-        f"🚕 Заказ #{order_id} принят"
-    )
-
     await callback.answer()
+    
 
 # ======================
 # SELECT TIME
@@ -268,17 +322,24 @@ async def set_time(callback: types.CallbackQuery):
 
     order = orders.get(order_id)
 
-    if order:
-        await bot.send_message(
-            order["client_id"],
-            f"🚕 Водитель приедет через {minutes} минут"
+    if not order:
+        await callback.answer(
+            "Заказ уже отменён",
+            show_alert=True
         )
+        return
 
-    driver_order.pop(driver_id, None)
-    orders.pop(order_id, None)
+    orders[order_id]["driver_id"] = driver_id
+    orders[order_id]["status"] = "accepted"
+
+    await bot.send_message(
+        order["client_id"],
+        f"🚕 Водитель приедет через {minutes} минут"
+    )
 
     await callback.message.edit_text(
-        "✅ Отправлено клиенту 🚕"
+        f"✅ Время отправлено клиенту\n\n"
+        f"👤 Водитель №{driver_numbers[order_id]}"
     )
 
     await callback.answer()
