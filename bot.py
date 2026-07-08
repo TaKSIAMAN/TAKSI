@@ -240,11 +240,11 @@ async def accept(callback: types.CallbackQuery):
         reply_markup=keyboard
     )
 
-   await callback.answer()
+await callback.answer()
 
 
- @dp.callback_query(F.data.startswith("driver_"))
- async def choose_driver(callback: types.CallbackQuery):
+@dp.callback_query(F.data.startswith("driver_"))
+async def choose_driver(...)
 
     _, order_id, number = callback.data.split("_")
 
@@ -285,7 +285,7 @@ async def accept(callback: types.CallbackQuery):
         ]
     )
 
-    try:
+   try:
     await bot.edit_message_text(
         chat_id=DRIVER_CHAT_ID,
         message_id=orders[order_id]["driver_message_id"],
