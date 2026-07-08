@@ -236,18 +236,17 @@ async def accept(callback: types.CallbackQuery):
 
     await bot.send_message(
         callback.from_user.id,
-        "Выберите свой номер:",
+        "🚕 Выберите свой номер:",
         reply_markup=keyboard
     )
 
-await callback.answer()
+    await callback.answer()
 
 
 @dp.callback_query(F.data.startswith("driver_"))
-async def choose_driver(...)
+async def choose_driver(callback: types.CallbackQuery):
 
     _, order_id, number = callback.data.split("_")
-
     order_id = int(order_id)
 
     if order_id not in orders:
@@ -285,22 +284,23 @@ async def choose_driver(...)
         ]
     )
 
-   try:
-    await bot.edit_message_text(
-        chat_id=DRIVER_CHAT_ID,
-        message_id=orders[order_id]["driver_message_id"],
-        text=(
-            f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n\n"
-            f"{orders[order_id]['text']}\n\n"
-            f"👤 Водитель №{number}"
-        ),
-        reply_markup=None
-    )
-except:
-    pass
+    try:
+        await bot.edit_message_text(
+            chat_id=DRIVER_CHAT_ID,
+            message_id=orders[order_id]["driver_message_id"],
+            text=(
+                f"🚕 НОВЫЙ ЗАКАЗ #{order_id}\n\n"
+                f"{orders[order_id]['text']}\n\n"
+                f"👤 Водитель №{number}"
+            ),
+            reply_markup=None
+        )
+    except:
+        pass
+
     await bot.send_message(
         callback.from_user.id,
-        "⏱ Выбери время прибытия:",
+        "⏱ Выберите время прибытия:",
         reply_markup=keyboard
     )
 
